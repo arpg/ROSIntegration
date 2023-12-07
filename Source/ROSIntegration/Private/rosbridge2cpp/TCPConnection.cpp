@@ -25,7 +25,8 @@ bool TCPConnection::Init(std::string ip_addr, int port)
 
 	if (!ipValid)
 	{
-		std::cout << "Given IP address is invalid: " << *address << std::endl;
+		FTCHARToUTF8 UTF8Converter(*address);
+		std::cout << "Given IP address is invalid: " << UTF8Converter.Get() << std::endl;
 		return false;
 	}
 
