@@ -90,5 +90,7 @@ public class ROSIntegration : ModuleRules
 			PublicAdditionalLibraries.Add(Path.Combine(BSONPath, "lib", "libbson-static-1.0.a"));
 			PublicIncludePaths.Add(Path.Combine(BSONPath, "include", "mac"));
 		}
+		
+		bEnableExceptions = true; 
 	}
 }
