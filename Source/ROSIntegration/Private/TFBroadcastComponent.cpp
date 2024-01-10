@@ -11,8 +11,8 @@ UTFBroadcastComponent::UTFBroadcastComponent()
 , CoordsRelativeTo(ECoordinateType::COORDTYPE_WORLD)
 , ParentFrameName(TEXT("/world"))
 , ThisFrameName(TEXT("/tfbroadcast_default"))
-, UseParentActorLabelAsParentFrame(true)
-, UseActorLabelAsFrame(true)
+, UseParentActorLabelAsParentFrame(false)
+, UseActorLabelAsFrame(false)
 , FrameTime(1.0f / FrameRate)
 , TimePassed(0)
 {
@@ -23,15 +23,36 @@ UTFBroadcastComponent::UTFBroadcastComponent()
 }
 
 // Called when the game starts
+DEFINE_LOG_CATEGORY_STATIC(LogTFBroadcastComponent, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogTFBroadcastComponentTick, Log, All);
+
 void UTFBroadcastComponent::BeginPlay()
 {
-	Super::BeginPlay();
+    Super::BeginPlay();
 
-	assert(GetOwner());
+    // Check if the owner exists
+    if (!GetOwner())
+    {
+        UE_LOG(LogTFBroadcastComponent, Error, TEXT("UTFBroadcastComponent::BeginPlay() - GetOwner() returned nullptr."));
+        return;
+    }
 
-	_TFTopic = NewObject<UTopic>(UTopic::StaticClass());
-	UROSIntegrationGameInstance* ROSInstance = Cast<UROSIntegrationGameInstance>(GetOwner()->GetGameInstance());
-	_TFTopic->Init(ROSInstance->ROSIntegrationCore, TEXT("/tf"), TEXT("tf2_msgs/TFMessage"));
+    _TFTopic = NewObject<UTopic>(UTopic::StaticClass());
+    if (!_TFTopic)
+    {
+        UE_LOG(LogTFBroadcastComponent, Error, TEXT("UTFBroadcastComponent::BeginPlay() - Failed to create UTopic object."));
+        return;
+    }
+
+    UROSIntegrationGameInstance* ROSInstance = Cast<UROSIntegrationGameInstance>(GetOwner()->GetGameInstance());
+    if (!ROSInstance)
+    {
+        UE_LOG(LogTFBroadcastComponent, Error, TEXT("UTFBroadcastComponent::BeginPlay() - Failed to cast GameInstance to UROSIntegrationGameInstance."));
+        return;
+    }
+
+    _TFTopic->Init(ROSInstance->ROSIntegrationCore, TEXT("/tf"), TEXT("tf2_msgs/TFMessage"));
+    UE_LOG(LogTFBroadcastComponent, Log, TEXT("UTFBroadcastComponent::BeginPlay() - TF Topic initialized."));
 }
 
 AActor* UTFBroadcastComponent::GetParentActor()
@@ -44,166 +65,164 @@ AActor* UTFBroadcastComponent::GetParentActor()
 	return RootComponent->GetAttachParent()->GetOwner();
 }
 
-// Called every frame
-void UTFBroadcastComponent::TickComponent(float DeltaTime,
-	ELevelTick TickType,
-	FActorComponentTickFunction* ThisTickFunction)
+
+void UTFBroadcastComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// Check for framerate
-	TimePassed += DeltaTime;
-	if (TimePassed < FrameTime) {
-		return;
-	}
-	TimePassed -= FrameTime;
+    // Log the beginning of a Tick
+    UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - Start"));
 
-	TickCounter++;
+    // Check for framerate
+    TimePassed += DeltaTime;
+    if (TimePassed < FrameTime) {
+        UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - Skipping this frame based on FrameTime"));
+        return;
+    }
+    TimePassed -= FrameTime;
 
-	bool GlobalSettingTFBroadcastEnabled = false;
+    TickCounter++;
 
-	//auto World = GetWorld();
-	//if (World) {
-	//	auto WorldSettings = World->GetWorldSettings();
-	//	if (WorldSettings) {
-	//		AMyWorldSettings* MyWorldSettings = Cast<AMyWorldSettings>(WorldSettings);
-	//		GlobalSettingTFBroadcastEnabled = MyWorldSettings->bEnableTFBroadcast;
-	//		//			OUT_INFO(TEXT("MyWorldSettings::bEnableTFBroadcast is %s"), GlobalSettingTFBroadcastEnabled ? TEXT("True") : TEXT("False"));
-	//	}
-	//	else {
-	//		OUT_INFO(TEXT("Failed to GetWorldSettings() - Can't access WorldSettings"));
-	//	}
-	//}
-	//else {
-	//	OUT_INFO(TEXT("Failed to GetWorld() - Can't access WorldSettings"));
-	//}
+    bool GlobalSettingTFBroadcastEnabled = false;
 
-	//	OUT_INFO(TEXT("Owner Loc: %s"), *(GetOwner()->GetActorLocation().ToString()));
-	TickCounter = 0;
+    /*auto World = GetWorld();
+    if (World) {
+        auto WorldSettings = World->GetWorldSettings();
+        if (WorldSettings) {
+            AMyWorldSettings* MyWorldSettings = Cast<AMyWorldSettings>(WorldSettings);
+            GlobalSettingTFBroadcastEnabled = MyWorldSettings->bEnableTFBroadcast;
+            // Log MyWorldSettings::bEnableTFBroadcast value
+            UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("MyWorldSettings::bEnableTFBroadcast is %s"), GlobalSettingTFBroadcastEnabled ? TEXT("True") : TEXT("False"));
+        }
+        else {
+            UE_LOG(LogTFBroadcastComponentTick, Warning, TEXT("Failed to GetWorldSettings() - Can't access WorldSettings"));
+        }
+    }
+    else {
+        UE_LOG(LogTFBroadcastComponentTick, Warning, TEXT("Failed to GetWorld() - Can't access World"));
+    }*/
 
-	// Skip execution when TF is deactivated globally
-	//if (!GlobalSettingTFBroadcastEnabled) return;
+    // Log owner location
+    if (GetOwner()) {
+        UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("Owner Loc: %s"), *(GetOwner()->GetActorLocation().ToString()));
+    } else {
+        UE_LOG(LogTFBroadcastComponentTick, Error, TEXT("TickComponent - GetOwner() returned nullptr."));
+        return;
+    }
 
-	if (!ComponentActive) return;
+    TickCounter = 0;
 
-	assert(GetOwner() != nullptr);
+    // Skip execution when TF is deactivated globally
+    //if (!GlobalSettingTFBroadcastEnabled) return;
 
-	// Setup the Frame Names
-	// The frame name of this component/actor
-	FString CurrentThisFrameName = ThisFrameName;
+    if (!ComponentActive) {
+        UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - Component is not active, skipping"));
+        return;
+    }
+
+    // Setup the Frame Names
+    FString CurrentThisFrameName = ThisFrameName;
 #if WITH_EDITOR
-	if (UseActorLabelAsFrame)
-	{
-		CurrentThisFrameName = GetOwner()->GetActorLabel();
-	}
+    if (UseActorLabelAsFrame) {
+        CurrentThisFrameName = GetOwner()->GetActorLabel();
+    }
 #endif // WITH_EDITOR
 
-	// The frame name of the parent
-	FString CurrentParentFrameName = ParentFrameName;
-
+    FString CurrentParentFrameName = ParentFrameName;
 #if WITH_EDITOR
-	// Lookup the parent of this frame in hierarchy
-	if (UseParentActorLabelAsParentFrame)
-	{
-		AActor* ParentActor = GetParentActor();
-		if (ParentActor)
-		{
-			CurrentParentFrameName = ParentActor->GetActorLabel();
-			// Force set the CoordsRelativeTo Variable to RELATIVE
-			// Please make sure that the child has set it's transformation to 'relative'
-			CoordsRelativeTo = ECoordinateType::COORDTYPE_RELATIVE;
-		} else {
-			UE_LOG(LogROS, Error, TEXT("[TFBroadcast] UseParentActorLabelAsParentFrame==true and No Parent Component on %s - Add a parent actor or deactivate UseParentActorLabelAsParentFrame"), *(GetOwner()->GetActorLabel()));
-		}
-	}
+    if (UseParentActorLabelAsParentFrame) {
+        AActor* ParentActor = GetParentActor();
+        if (ParentActor) {
+            CurrentParentFrameName = ParentActor->GetActorLabel();
+            CoordsRelativeTo = ECoordinateType::COORDTYPE_RELATIVE;
+        } else {
+            UE_LOG(LogTFBroadcastComponentTick, Error, TEXT("[TFBroadcast] UseParentActorLabelAsParentFrame==true and No Parent Component on %s - Add a parent actor or deactivate UseParentActorLabelAsParentFrame"), *(GetOwner()->GetActorLabel()));
+            return;
+        }
+    }
 #endif // WITH_EDITOR
 
-	FVector ActorTranslation;
-	FQuat ActorRotation;
+    FVector ActorTranslation;
+    FQuat ActorRotation;
 
-	if (CoordsRelativeTo == ECoordinateType::COORDTYPE_RELATIVE) {
-		AActor* ParentActor = GetParentActor();
-		if (!ParentActor) {
+    if (CoordsRelativeTo == ECoordinateType::COORDTYPE_RELATIVE) {
+        AActor* ParentActor = GetParentActor();
+        if (!ParentActor) {
 #if WITH_EDITOR
-			UE_LOG(LogROS, Error, TEXT("[TFBroadcast] CoordsRelativeTo == ECoordinateType::COORDTYPE_RELATIVE and No Parent Component on %s - Add a parent actor or use world coordinates. Skipping TF Broadcast"), *(GetOwner()->GetActorLabel()));
+            UE_LOG(LogTFBroadcastComponentTick, Error, TEXT("[TFBroadcast] CoordsRelativeTo == ECoordinateType::COORDTYPE_RELATIVE and No Parent Component on %s - Add a parent actor or use world coordinates. Skipping TF Broadcast"), *(GetOwner()->GetActorLabel()));
 #else
-			UE_LOG(LogROS, Error, TEXT("[TFBroadcast] CoordsRelativeTo == ECoordinateType::COORDTYPE_RELATIVE and No Parent Component - Add a parent actor or use world coordinates. Skipping TF Broadcast"));
+            UE_LOG(LogTFBroadcastComponentTick, Error, TEXT("[TFBroadcast] CoordsRelativeTo == ECoordinateType::COORDTYPE_RELATIVE and No Parent Component - Add a parent actor or use world coordinates. Skipping TF Broadcast"));
 #endif // WITH_EDITOR
-			return;
-		}
-		FTransform ThisTransformInWorldCoordinates = GetOwner()->GetRootComponent()->GetComponentTransform();
-		FTransform ParentTransformInWorldCoordinates = ParentActor->GetRootComponent()->GetComponentTransform();
-		FTransform RelativeTransform = ThisTransformInWorldCoordinates.GetRelativeTransform(ParentTransformInWorldCoordinates);
-		ActorTranslation = RelativeTransform.GetLocation();
-		ActorRotation = RelativeTransform.GetRotation();
-	} else {
-		ActorTranslation = GetOwner()->GetActorLocation();
-		ActorRotation = GetOwner()->GetActorQuat();
-	}
+            return;
+        }
+        FTransform ThisTransformInWorldCoordinates = GetOwner()->GetRootComponent()->GetComponentTransform();
+        FTransform ParentTransformInWorldCoordinates = ParentActor->GetRootComponent()->GetComponentTransform();
+        FTransform RelativeTransform = ThisTransformInWorldCoordinates.GetRelativeTransform(ParentTransformInWorldCoordinates);
+        ActorTranslation = RelativeTransform.GetLocation();
+        ActorRotation = RelativeTransform.GetRotation();
+    } else {
+        ActorTranslation = GetOwner()->GetActorLocation();
+        ActorRotation = GetOwner()->GetActorQuat();
+    }
 
-	// Convert to meters and ROS coordinate system
-	double TranslationX = ActorTranslation.X / 100.0f;
-	double TranslationY = -ActorTranslation.Y / 100.0f;
-	double TranslationZ = ActorTranslation.Z / 100.0f;
-	double RotationX = -ActorRotation.X;
-	double RotationY = ActorRotation.Y;
-	double RotationZ = -ActorRotation.Z;
-	double RotationW = ActorRotation.W;
+    // Log the calculated transformation
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - Actor Translation: %s, Actor Rotation: %s"), *ActorTranslation.ToString(), *ActorRotation.ToString());
+
+	double TranslationX = -ActorTranslation.X / 100.0f;
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TranslationX calculated: %f"), TranslationX);
+
+	double TranslationY = ActorTranslation.Y / 100.0f;
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TranslationY calculated: %f"), TranslationY);
+
+	double TranslationZ = -ActorTranslation.Z / 100.0f;
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TranslationZ calculated: %f"), TranslationZ);
+
+	// double RotationX = -ActorRotation.X;
+	 double RotationX = 0;
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationX calculated: %f"), RotationX);
+
+	// double RotationY = ActorRotation.Y;
+	 double RotationY = 0;
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationY calculated: %f"), RotationY);
+
+	// double RotationZ = -ActorRotation.Z;
+	double RotationZ = 0;
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationZ calculated: %f"), RotationZ);
+
+	// double RotationW = ActorRotation.W;
+	 double RotationW = 1;
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationW calculated: %f"), RotationW);
 
 	FROSTime time = FROSTime::Now();
+	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - FROSTime::Now() called"));
 
 	TSharedPtr<ROSMessages::tf2_msgs::TFMessage> TFMessage(new ROSMessages::tf2_msgs::TFMessage());
-	ROSMessages::geometry_msgs::TransformStamped TransformStamped;
-	TransformStamped.header.seq = 0;
-	TransformStamped.header.time = time;
-	TransformStamped.header.frame_id = CurrentParentFrameName;
-	TransformStamped.child_frame_id = CurrentThisFrameName;
-	TransformStamped.transform.translation.x = TranslationX;
-	TransformStamped.transform.translation.y = TranslationY;
-	TransformStamped.transform.translation.z = TranslationZ;
-	TransformStamped.transform.rotation.x = RotationX;
-	TransformStamped.transform.rotation.y = RotationY;
-	TransformStamped.transform.rotation.z = RotationZ;
-	TransformStamped.transform.rotation.w = RotationW;
+	if (!TFMessage.IsValid()) {
+		UE_LOG(LogTFBroadcastComponentTick, Error, TEXT("TickComponent - Failed to create new ROSMessages::tf2_msgs::TFMessage"));
+		return;
+}
 
-	TFMessage->transforms.Add(TransformStamped);
+ROSMessages::geometry_msgs::TransformStamped TransformStamped;
+TransformStamped.header.seq = 0;
+TransformStamped.header.time = time;
+TransformStamped.header.frame_id = CurrentParentFrameName;
+TransformStamped.child_frame_id = CurrentThisFrameName;
+TransformStamped.transform.translation.x = TranslationX;
+TransformStamped.transform.translation.y = TranslationY;
+TransformStamped.transform.translation.z = TranslationZ;
+TransformStamped.transform.rotation.x = RotationX;
+TransformStamped.transform.rotation.y = RotationY;
+TransformStamped.transform.rotation.z = RotationZ;
+TransformStamped.transform.rotation.w = RotationW;
 
-	_TFTopic->Publish(TFMessage);
+UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TransformStamped prepared"));
 
-	/*rosbridge2cpp::ROSTime time = rosbridge2cpp::ROSTime::now();
+TFMessage->transforms.Add(TransformStamped);
+UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TransformStamped added to TFMessage"));
 
-	bson_t *transform = BCON_NEW(
-		"transforms",
-		"[",
-		"{",
-		"header", "{",
-		"seq", BCON_INT32(0),
-		"stamp", "{",
-		"secs", BCON_INT32(time.sec_),
-		"nsecs", BCON_INT32(time.nsec_),
-		"}",
-		"frame_id", BCON_UTF8(TCHAR_TO_ANSI(*CurrentParentFrameName)),
-		"}",
-		"child_frame_id", BCON_UTF8(TCHAR_TO_ANSI(*CurrentThisFrameName)),
-		"transform", "{",
-		"translation", "{",
-		"x", BCON_DOUBLE(TranslationX),
-		"y", BCON_DOUBLE(TranslationY),
-		"z", BCON_DOUBLE(TranslationZ),
-		"}",
-		"rotation", "{",
-		"x", BCON_DOUBLE(RotationX),
-		"y", BCON_DOUBLE(RotationY),
-		"z", BCON_DOUBLE(RotationZ),
-		"w", BCON_DOUBLE(RotationW),
-		"}",
-		"}",
-		"}",
-		"]"
-	);
+_TFTopic->Publish(TFMessage);
+UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TF Message published."));
 
-	_tf->SendTransform(*transform);
-	*/
 }
 
 void UTFBroadcastComponent::SetFramerate(const float _FrameRate)
