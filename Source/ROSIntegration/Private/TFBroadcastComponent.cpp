@@ -165,36 +165,16 @@ void UTFBroadcastComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
         ActorRotation = GetOwner()->GetActorQuat();
     }
 
-    // Log the calculated transformation
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - Actor Translation: %s, Actor Rotation: %s"), *ActorTranslation.ToString(), *ActorRotation.ToString());
+	double TranslationX = ActorTranslation.X / 100.0f;
+	double TranslationY = -ActorTranslation.Y / 100.0f;
+	double TranslationZ = ActorTranslation.Z / 100.0f;
+	double RotationX = -ActorRotation.X;
+	double RotationY = ActorRotation.Y;
+	double RotationZ = -ActorRotation.Z;
+	double RotationW = ActorRotation.W;
 
-	double TranslationX = -ActorTranslation.X / 100.0f;
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TranslationX calculated: %f"), TranslationX);
-
-	double TranslationY = ActorTranslation.Y / 100.0f;
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TranslationY calculated: %f"), TranslationY);
-
-	double TranslationZ = -ActorTranslation.Z / 100.0f;
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TranslationZ calculated: %f"), TranslationZ);
-
-	// double RotationX = -ActorRotation.X;
-	 double RotationX = 0;
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationX calculated: %f"), RotationX);
-
-	// double RotationY = ActorRotation.Y;
-	 double RotationY = 0;
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationY calculated: %f"), RotationY);
-
-	// double RotationZ = -ActorRotation.Z;
-	double RotationZ = 0;
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationZ calculated: %f"), RotationZ);
-
-	// double RotationW = ActorRotation.W;
-	 double RotationW = 1;
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - RotationW calculated: %f"), RotationW);
 
 	FROSTime time = FROSTime::Now();
-	UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - FROSTime::Now() called"));
 
 	TSharedPtr<ROSMessages::tf2_msgs::TFMessage> TFMessage(new ROSMessages::tf2_msgs::TFMessage());
 	if (!TFMessage.IsValid()) {
@@ -215,13 +195,10 @@ TransformStamped.transform.rotation.y = RotationY;
 TransformStamped.transform.rotation.z = RotationZ;
 TransformStamped.transform.rotation.w = RotationW;
 
-UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TransformStamped prepared"));
 
 TFMessage->transforms.Add(TransformStamped);
-UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TransformStamped added to TFMessage"));
 
 _TFTopic->Publish(TFMessage);
-UE_LOG(LogTFBroadcastComponentTick, Log, TEXT("TickComponent - TF Message published."));
 
 }
 
