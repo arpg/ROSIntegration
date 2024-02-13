@@ -261,7 +261,7 @@ void UROSIntegrationGameInstance::OnWorldTickStart(UWorld * World, ELevelTick Ti
 void UROSIntegrationGameInstance::OnWorldTickStart(ELevelTick TickType, float DeltaTime)
 #endif
 {
-	if (bSimulateTime && TickType == ELevelTick::LEVELTICK_TimeOnly)
+	if (bSimulateTime && TickType != ELevelTick::LEVELTICK_PauseTick)
 	{
 		FApp::SetFixedDeltaTime(FixedUpdateInterval);
 		FApp::SetUseFixedTimeStep(bUseFixedUpdateInterval);
