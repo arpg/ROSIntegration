@@ -8,6 +8,8 @@
 #include "Kismet/GameplayStatics.h"
 
 
+#include <chrono>
+
 void UROSIntegrationGameInstance::Init()
 {
 	Super::Init();
@@ -261,33 +263,36 @@ void UROSIntegrationGameInstance::OnWorldTickStart(UWorld * World, ELevelTick Ti
 void UROSIntegrationGameInstance::OnWorldTickStart(ELevelTick TickType, float DeltaTime)
 #endif
 {
-	if (bSimulateTime && TickType != ELevelTick::LEVELTICK_PauseTick)
-	{
-		FApp::SetFixedDeltaTime(FixedUpdateInterval);
-		FApp::SetUseFixedTimeStep(bUseFixedUpdateInterval);
+    if (bSimulateTime && TickType != ELevelTick::LEVELTICK_PauseTick)
+    {
+        FApp::SetFixedDeltaTime(FixedUpdateInterval);
+        FApp::SetUseFixedTimeStep(bUseFixedUpdateInterval);
 
-		FROSTime now = FROSTime::Now();
+        // Get the current time at the point of this function call, in seconds since the Unix epoch
+        auto now_chrono = std::chrono::system_clock::now();
+        auto now_epoch = now_chrono.time_since_epoch();
+        auto now_seconds = std::chrono::duration_cast<std::chrono::seconds>(now_epoch).count();
 
-		// advance ROS time
-		unsigned long seconds = (unsigned long)DeltaTime;
-		unsigned long long nanoseconds = (unsigned long long)(DeltaTime * 1000000000ul);
-		unsigned long nanoseconds_only = nanoseconds - (seconds * 1000000000ul);
+        // Since this value should remain constant throughout the simulation, it's declared static.
+        // It's initialized only once at the first function call, capturing the simulation's start time.
+        static const long long SimulationStartTime = now_seconds;
 
-		now._Sec += seconds;
-		now._NSec += nanoseconds_only;
+        float UnrealTimeSeconds = GetWorld()->GetTimeSeconds(); // Get the current game time in seconds
 
-		if (now._NSec >= 1000000000ul)
-		{
-			now._Sec += 1;
-			now._NSec -= 1000000000ul;
-		}
+        // Convert to nanoseconds and add to our simulation start time to get the current simulated Unix epoch time
+        long long CurrentSimulatedTimeNanoseconds = SimulationStartTime * 1000000000ll + static_cast<long long>(UnrealTimeSeconds * 1000000000.0);
 
-		// internal update for ROSIntegration
-		FROSTime::SetSimTime(now);
+        FROSTime now;
+        now._Sec = CurrentSimulatedTimeNanoseconds / 1000000000; // Set seconds part for simulated Unix time
+        now._NSec = CurrentSimulatedTimeNanoseconds % 1000000000; // Set nanoseconds part
 
-		// send /clock topic to let everyone know what time it is...
-		TSharedPtr<ROSMessages::rosgraph_msgs::Clock> ClockMessage(new ROSMessages::rosgraph_msgs::Clock(now));
-		ClockTopic->Publish(ClockMessage);
-	}
+        // Internal update for ROSIntegration to use the adjusted simulation time
+        FROSTime::SetSimTime(now);
+
+        // Send /clock topic to let everyone know what simulated Unix epoch time it is...
+        TSharedPtr<ROSMessages::rosgraph_msgs::Clock> ClockMessage(new ROSMessages::rosgraph_msgs::Clock(now));
+        ClockTopic->Publish(ClockMessage);
+    }
 }
+
 
